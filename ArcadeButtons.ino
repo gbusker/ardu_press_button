@@ -1,5 +1,6 @@
 #include <PinChangeInt.h>
 #include <Ethernet.h>
+#include <HttpClient.h>
 
 // Arduino NANO
 //
@@ -22,6 +23,13 @@ int nbuttons = 3;
 int ledPin[] = {PD3, PD5, PD6};    
 int buttonPin[] = {PD2, PD4, PD7};  
 
+// Message interface
+// replace with some moderately real URL
+char url[] = "http://localhost:9000?kitcode=944A0CE6F141&eventCode=";
+// "http://lighting.dev.smartgaiacloud.com/diagCode/demo2_api.php?kitcode=944A0CE6F141&eventCode="
+int eventCodeOn[] = {900101, 900102, 900103};
+int eventCodeOff[] = {0,0,0};
+
 // State
 int state[] = {0, 0, 0};
 int level[] = {0, 0, 0};
@@ -33,7 +41,7 @@ byte mac[] = {
 
 void setup() {
   configure_input_pins();
-  //Ethernet.begin(mac);
+  Ethernet.begin(mac);
   on(0);
   on(1);
   off(1);
@@ -72,16 +80,28 @@ void handle_press() {
   for (int i=0; i<nbuttons; i++) {
     latest_interrupted_pin=PCintPort::arduinoPin;
     if ( buttonPin[i] == latest_interrupted_pin ) {
-      if ( state[i] ) {
-        off(i);
-      } 
-      else {
-        on(i);
-      }
+      toggle_lights(i);
+      call_api(i);
     }
   }
 }
 
+void toggle_lights(int pin) {
+  if ( state[pin] ) {
+    off(pin);
+  } 
+  else {
+    on(pin);
+  }
+}
+
+void call_api(int pin) {
+  HttpClient client;
+  char buffer[256];
+  if ( int event = state[pin] ? eventCodeOff[pin] : eventCodeOn[pin] ) {
+    client.get(sprintf(buffer, "%s%d", url, event));
+  }
+}
 
 void on(int led) {
   if (led<0 or led>nbuttons) { return; };
