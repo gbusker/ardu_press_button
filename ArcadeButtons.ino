@@ -1,6 +1,6 @@
 #include <PinChangeInt.h>
-#include <Ethernet.h>
-#include <HttpClient.h>
+#include <UIPEthernet.h>
+// #include <HttpClient.h>
 
 // Arduino NANO
 //
@@ -25,8 +25,10 @@ int buttonPin[] = {PD2, PD4, PD7};
 
 // Message interface
 // replace with some moderately real URL
-char url[] = "http://localhost:9000?kitcode=944A0CE6F141&eventCode=";
+// char url[] = "http://localhost:9000?kitcode=944A0CE6F141&eventCode=";
 // "http://lighting.dev.smartgaiacloud.com/diagCode/demo2_api.php?kitcode=944A0CE6F141&eventCode="
+char server[] = "192.168.6.2";
+char path[] = "/test";
 int eventCodeOn[] = {900101, 900102, 900103};
 int eventCodeOff[] = {0,0,0};
 
@@ -39,9 +41,26 @@ int level[] = {0, 0, 0};
 byte mac[] = { 
   0xDE, 0xAD, 0xBE, 0x01, 0xFE, 0x01 };
 
+EthernetClient client;
+IPAddress ip(192,168,6,10);
+
+
 void setup() {
+  Serial.begin(9600);
+  Serial.println("I'm awake!");
+  pinMode(13, OUTPUT);
+  status(1);
+  Serial.print("Configuring pins ...");
   configure_input_pins();
-  Ethernet.begin(mac);
+  Serial.println(" done");
+  Serial.println("Configuring Ethernet ...");
+  if ( Ethernet.begin(mac) == 0 ) {
+    Serial.println("DHCP failed - static address.");
+    Ethernet.begin(mac, ip);
+  }
+  Serial.print("Ethernet configured: ");
+  Serial.println(Ethernet.localIP());
+  status(0);
   on(0);
   on(1);
   off(1);
@@ -51,6 +70,10 @@ void loop() {
   // put your main code here, to run repeatedly:
   manageLights();
   delay(10);
+}
+
+void status(int on) {
+  digitalWrite(13,on);
 }
 
 void manageLights() {
@@ -64,19 +87,14 @@ void manageLights() {
 void configure_input_pins() {
   for (int button = 0 ; button < nbuttons ; button++) {
     pinMode(buttonPin[button], INPUT_PULLUP);
-    attachPinChangeInterrupt(buttonPin[button], handle_press, RISING);
-  }
-}
-
-void configure_led_output_pins() {
-  for (int button = 0 ; button < nbuttons ; button++) {
-    pinMode(ledPin[button], OUTPUT);
+    // attachPinChangeInterrupt(buttonPin[button], handle_press, RISING);
   }
 }
 
 
 volatile uint8_t latest_interrupted_pin;
 void handle_press() {
+  status(1);
   for (int i=0; i<nbuttons; i++) {
     latest_interrupted_pin=PCintPort::arduinoPin;
     if ( buttonPin[i] == latest_interrupted_pin ) {
@@ -84,6 +102,7 @@ void handle_press() {
       call_api(i);
     }
   }
+  status(0);
 }
 
 void toggle_lights(int pin) {
@@ -96,10 +115,15 @@ void toggle_lights(int pin) {
 }
 
 void call_api(int pin) {
-  HttpClient client;
   char buffer[256];
   if ( int event = state[pin] ? eventCodeOff[pin] : eventCodeOn[pin] ) {
-    client.get(sprintf(buffer, "%s%d", url, event));
+    if ( client.connect(server,80) ) {
+      client.println("GET /test");
+      client.print("Host: ");
+      client.println(server);
+      client.println("Connection: close");
+      client.println();
+    }
   }
 }
 
