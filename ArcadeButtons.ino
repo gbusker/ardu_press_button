@@ -1,6 +1,4 @@
-#include <PinChangeInt.h>
 #include <UIPEthernet.h>
-// #include <HttpClient.h>
 
 // Arduino NANO
 //
@@ -22,6 +20,7 @@
 int nbuttons = 3;
 int ledPin[] = {PD3, PD5, PD6};    
 int buttonPin[] = {PD2, PD4, PD7};  
+byte buttonMask[] = { 0b100, 0b10000, 0b10000000 };
 
 // Message interface
 // replace with some moderately real URL
@@ -84,10 +83,32 @@ void manageLights() {
   }
 }
 
+void pciSetup(byte pin)
+{
+    *digitalPinToPCMSK(pin) |= bit (digitalPinToPCMSKbit(pin));  // enable pin
+    PCIFR  |= bit (digitalPinToPCICRbit(pin)); // clear any outstanding interrupt
+    PCICR  |= bit (digitalPinToPCICRbit(pin)); // enable interrupt for the group
+}
+
+ISR (PCINT2_vect) // handle pin change interrupt for D0 to D7 here
+ {  
+    byte pin = PIND & (buttonMask[0]|buttonMask[1]|buttonMask[2]) ;
+    if ( ( pin & buttonMask[0] ) == 0 ) {
+      Serial.println("Button 0"); 
+    }
+    if ( ( pin & buttonMask[1] ) == 0  ) {
+      Serial.println("Button 1"); 
+    }
+    if ( ( pin & buttonMask[2] ) == 0 ) {
+      Serial.println("Button 2"); 
+    }
+ }  
+
 void configure_input_pins() {
   for (int button = 0 ; button < nbuttons ; button++) {
     pinMode(buttonPin[button], INPUT_PULLUP);
     // attachPinChangeInterrupt(buttonPin[button], handle_press, RISING);
+    pciSetup(buttonPin[button]);
   }
 }
 
@@ -96,7 +117,7 @@ volatile uint8_t latest_interrupted_pin;
 void handle_press() {
   status(1);
   for (int i=0; i<nbuttons; i++) {
-    latest_interrupted_pin=PCintPort::arduinoPin;
+//    latest_interrupted_pin=PCintPort::arduinoPin;
     if ( buttonPin[i] == latest_interrupted_pin ) {
       toggle_lights(i);
       call_api(i);
