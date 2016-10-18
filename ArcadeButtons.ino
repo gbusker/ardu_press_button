@@ -1,6 +1,3 @@
-// #define WITH_ETHERNET
-
-#include <UIPEthernet.h>
 
 // Arduino NANO
 //
@@ -28,26 +25,13 @@ byte buttonMask[] = { 0b100, 0b10000, 0b10000000 };
 int button_timeout = 500;
 int last_interrupt[] = {0, 0, 0};
 
-
-// Message interface
-// replace with some moderately real URL
-// char url[] = "http://localhost:9000?kitcode=944A0CE6F141&eventCode=";
-// "http://lighting.dev.smartgaiacloud.com/diagCode/demo2_api.php?kitcode=944A0CE6F141&eventCode="
-char server[] = "192.168.6.2";
-char path[] = "/test";
-int eventCodeOn[] = {900101, 900102, 900103};
-int eventCodeOff[] = {0,0,0};
+long eventCodeOn[] =  {900101, 900102, 900103};
+long eventCodeOff[] = {900201, 900202, 900203};
 
 // State
 int state[] = {0, 0, 0};
 int level[] = {0, 0, 0};
 
-// MAC address
-byte mac[] = { 
-  0xDE, 0xAD, 0xBE, 0x01, 0xFE, 0x01 };
-
-EthernetClient client;
-IPAddress ip(192,168,6,10);
 
 
 void setup() {
@@ -58,15 +42,6 @@ void setup() {
   Serial.print("Configuring pins ...");
   configure_input_pins();
   Serial.println(" done");
-#ifdef WITH_ETHERNET
-  Serial.println("Configuring Ethernet ...");
-  if ( Ethernet.begin(mac) == 0 ) {
-    Serial.println("DHCP failed - static address.");
-    Ethernet.begin(mac, ip);
-  }
-  Serial.print("Ethernet configured: ");
-  Serial.println(Ethernet.localIP());
-#endif
   status(0);
 }
 
@@ -98,17 +73,13 @@ void pciSetup(byte pin)
 ISR (PCINT2_vect) // handle pin change interrupt for D0 to D7 here
  {  
     byte pin = PIND & (buttonMask[0]|buttonMask[1]|buttonMask[2]) ;
-    if ( ( pin & buttonMask[0] ) == 0 & check_timeout(0) ) {
-      Serial.println("Button 0");
-      toggle_lights(0);
-    }
-    if ( ( pin & buttonMask[1] ) == 0 & check_timeout(1) ) {
-      Serial.println("Button 1"); 
-      toggle_lights(1);
-    }
-    if ( ( pin & buttonMask[2] ) == 0 & check_timeout(2) ) {
-      Serial.println("Button 2"); 
-      toggle_lights(2);
+    for ( int button = 0; button<3; button++ ) {
+      if ( ( pin & buttonMask[button] ) == 0 & check_timeout(button) ) {
+        Serial.print("Button ");
+        Serial.println(button);
+        toggle_lights(button);
+        call_api(button);
+      }
     }
  }  
 
@@ -140,18 +111,11 @@ void toggle_lights(int pin) {
 }
 
 void call_api(int pin) {
-#ifdef WITH_ETHERNET
   char buffer[256];
-  if ( int event = state[pin] ? eventCodeOff[pin] : eventCodeOn[pin] ) {
-    if ( client.connect(server,80) ) {
-      client.println("GET /test");
-      client.print("Host: ");
-      client.println(server);
-      client.println("Connection: close");
-      client.println();
-    }
+  if ( long event = state[pin] ? eventCodeOn[pin] : eventCodeOff[pin] ) {
+    Serial.print("event ");
+    Serial.println(event);
   }
-#endif
 }
 
 void on(int led) {
