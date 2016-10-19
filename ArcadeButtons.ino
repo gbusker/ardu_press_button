@@ -22,17 +22,15 @@ int buttonPin[] = {PD2, PD4, PD7};
 byte buttonMask[] = { 0b100, 0b10000, 0b10000000 };
 
 // Anti stutter
-int button_timeout = 500;
-int last_interrupt[] = {0, 0, 0};
+unsigned long button_timeout = 100;
+volatile unsigned long last_interrupt[] = {0, 0, 0};
 
 long eventCodeOn[] =  {900101, 900102, 900103};
 long eventCodeOff[] = {900201, 900202, 900203};
 
 // State
-int state[] = {0, 0, 0};
-int level[] = {0, 0, 0};
-
-
+volatile int state[] = {0, 0, 0};
+volatile int change[] = {0, 0, 0};
 
 void setup() {
   Serial.begin(9600);
@@ -47,21 +45,26 @@ void setup() {
 
 void loop() {
   // put your main code here, to run repeatedly:
-  // manageLights();
-  //delay(10);
+  manageLights();
+  delay(50);
+}
+
+void manageLights() {
+  for (int i=0; i<3; i++) {
+    sei();
+    if (state[i] != change[i]) {
+      state[i] = change[i];
+      if ( state[i] ) { on(i); } else { off(i); };
+      call_api(i);
+    }
+    cli();
+  }
 }
 
 void status(int on) {
   digitalWrite(13,on);
 }
 
-void manageLights() {
-  for ( int i = 0; i<nbuttons; i++) {
-    if ( (not state[i]) and level[i] > 0 ) {
-      analogWrite(ledPin[i], --level[i]);
-    }
-  }
-}
 
 void pciSetup(byte pin)
 {
@@ -72,15 +75,14 @@ void pciSetup(byte pin)
 
 ISR (PCINT2_vect) // handle pin change interrupt for D0 to D7 here
  {  
+    sei();
     byte pin = PIND & (buttonMask[0]|buttonMask[1]|buttonMask[2]) ;
     for ( int button = 0; button<3; button++ ) {
       if ( ( pin & buttonMask[button] ) == 0 & check_timeout(button) ) {
-        Serial.print("Button ");
-        Serial.println(button);
-        toggle_lights(button);
-        call_api(button);
+        change[button] = state[button] ? 0:1;
       }
     }
+    cli();
  }  
 
 boolean check_timeout(int button) {
@@ -98,6 +100,7 @@ void configure_input_pins() {
   for (int button = 0 ; button < nbuttons ; button++) {
     pinMode(buttonPin[button], INPUT_PULLUP);
     pciSetup(buttonPin[button]);
+    pinMode(ledPin[button], OUTPUT);
   }
 }
 
@@ -121,15 +124,13 @@ void call_api(int pin) {
 void on(int led) {
   if (led<0 or led>nbuttons) { return; };
   state[led] = 1;
-  level[led] = 255;
-  analogWrite(ledPin[led],255);
+  digitalWrite(ledPin[led],1);
 }
 
 void off(int led) {
   if (led<0 or led>nbuttons) { return; };
   state[led] = 0;
-  analogWrite(ledPin[led],0);
-
+  digitalWrite(ledPin[led],0);
 }
 
 
